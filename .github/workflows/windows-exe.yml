@@ -1,0 +1,51 @@
+name: Build Windows caption editor
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'arena/3621eb21-taransc'
+    paths:
+      - 'python_caption_editor/**'
+      - '.github/workflows/windows-exe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test caption editor
+        run: python -m unittest discover -s python_caption_editor/tests -v
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Build single executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --console --name PersianCaptionEditor --add-data "python_caption_editor/static;static" python_caption_editor/app.py
+      - name: Smoke test executable
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'dist/PersianCaptionEditor.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--port', '0' -PassThru -RedirectStandardOutput "$env:RUNNER_TEMP/caption-out.txt" -RedirectStandardError "$env:RUNNER_TEMP/caption-err.txt"
+          try {
+            $url = $null
+            for ($i = 0; $i -lt 45; $i++) {
+              Start-Sleep -Seconds 1
+              if ($p.HasExited) { throw "Executable exited early: $(Get-Content "$env:RUNNER_TEMP/caption-err.txt" -Raw)" }
+              $log = Get-Content "$env:RUNNER_TEMP/caption-out.txt" -Raw -ErrorAction SilentlyContinue
+              if ($log -match 'http://127\.0\.0\.1:\d+') { $url = $Matches[0]; break }
+            }
+            if (-not $url) { throw 'Executable did not start its server' }
+            $page = (Invoke-WebRequest -UseBasicParsing "$url/").Content
+            if ($page -notmatch 'app.js') { throw 'Editor assets were not served' }
+            $js = (Invoke-WebRequest -UseBasicParsing "$url/app.js").Content
+            if ($js -notmatch '/api/import') { throw 'JavaScript asset missing' }
+          } finally { if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PersianCaptionEditor-Windows
+          path: dist/PersianCaptionEditor.exe
+          if-no-files-found: error
