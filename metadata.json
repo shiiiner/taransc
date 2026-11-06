@@ -1,0 +1,6 @@
+{
+  "name": "Persian Caption Prep",
+  "description": "آماده‌سازی حرفه‌ای زیرنویس و ترنسکریپت کلمه‌به‌کلمه فارسی با هوش مصنوعی و خروجی برای After Effects Caption Studio",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
